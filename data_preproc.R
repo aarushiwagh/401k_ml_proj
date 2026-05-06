@@ -1,15 +1,6 @@
-# =============================================================================
-# Step 1: Data Preparation
-# 401(k) Project - Effects of 401(k) Participation on Wealth
-# =============================================================================
-
-# Install required packages if not already installed
-#install.packages(c("tidyverse", "haven", "fastDummies"))
-
 library(tidyverse)
 
-# ── 1. Load Data ──────────────────────────────────────────────────────────────
-df <- read.csv("401k.csv")   # adjust path if needed
+df <- read.csv("401k.csv")
 
 cat("=============================================================\n")
 cat("DATASET OVERVIEW\n")
@@ -18,7 +9,6 @@ cat("Rows:          ", nrow(df), "\n")
 cat("Columns:       ", ncol(df), "\n")
 cat("Column names:  ", paste(names(df), collapse = ", "), "\n")
 
-# ── 2. Check for Missing Values ───────────────────────────────────────────────
 cat("\n=============================================================\n")
 cat("MISSING VALUES PER COLUMN\n")
 cat("=============================================================\n")
@@ -26,8 +16,6 @@ missing_counts <- colSums(is.na(df))
 print(missing_counts)
 cat("Total missing values:", sum(missing_counts), "\n")
 
-# ── 3. Create Income Category Variable (matching the paper) ───────────────────
-# Paper uses: <$10K, $10-20K, $20-30K, $30-40K, $40-50K, $50-75K, >$75K
 df <- df %>%
   mutate(
     inc_cat = case_when(
@@ -39,7 +27,6 @@ df <- df %>%
       inc >= 50000 & inc <= 75000   ~ "50-75K",
       inc >  75000                  ~ ">75K"
     ),
-    # Set factor with ordered levels so tables display in correct order
     inc_cat = factor(inc_cat,
                      levels = c("<10K","10-20K","20-30K","30-40K",
                                 "40-50K","50-75K",">75K"))
@@ -50,7 +37,6 @@ cat("INCOME CATEGORY DISTRIBUTION\n")
 cat("=============================================================\n")
 print(table(df$inc_cat))
 
-# Income category dummy variables (base = "<10K" dropped in regressions)
 df <- df %>%
   mutate(
     inc_10_20  = as.integer(inc_cat == "10-20K"),
@@ -61,8 +47,6 @@ df <- df %>%
     inc_gt75   = as.integer(inc_cat == ">75K")
   )
 
-# ── 4. Create Education Dummies ───────────────────────────────────────────────
-# Paper groups: <12 yrs (nohs), 12 yrs (hs), 13-15 yrs (smcol), 16+ yrs (col)
 df <- df %>%
   mutate(
     nohs  = as.integer(educ < 12),
@@ -79,8 +63,6 @@ cat("High school (12 yrs):     ", sum(df$hs),    "\n")
 cat("Some college (13-15 yrs): ", sum(df$smcol), "\n")
 cat("College (16+ yrs):        ", sum(df$col),   "\n")
 
-# ── 5. Create Age Category Dummies (matching the paper) ──────────────────────
-# Paper groups: <30, 30-35, 36-44, 45-54, 55+
 df <- df %>%
   mutate(
     age_lt30    = as.integer(age < 30),
@@ -88,30 +70,18 @@ df <- df %>%
     age_36_44   = as.integer(age >= 36 & age <= 44),
     age_45_54   = as.integer(age >= 45 & age <= 54),
     age_55plus  = as.integer(age >= 55)
-    # age_55plus dropped as base category in regressions
   )
 
-# ── 6. Define Variable Groups ─────────────────────────────────────────────────
-
-# Outcome variables (three wealth measures from the paper)
 outcomes <- c("net_tfa", "net_nifa", "tw")
 
-# Treatment and instrument
-treatment  <- "p401"   # participation in 401(k)
-instrument <- "e401"   # eligibility for 401(k)  -- used as IV
+treatment  <- "p401"
+instrument <- "e401"
 
-# Full covariate list for regressions (matching paper's specification)
-# Base categories dropped: nohs (educ), age_55plus (age), inc_<10K (income)
 covariates_full <- c(
-  # Continuous
   "inc", "fsize",
-  # Binary household/financial characteristics
   "marr", "twoearn", "db", "pira", "hown",
-  # Education dummies (nohs is base/dropped)
   "hs", "smcol", "col",
-  # Age dummies (age_55plus is base/dropped)
   "age_lt30", "age_30_35", "age_36_44", "age_45_54",
-  # Income dummies (<10K is base/dropped)
   "inc_10_20", "inc_20_30", "inc_30_40",
   "inc_40_50", "inc_50_75", "inc_gt75"
 )
@@ -124,7 +94,6 @@ cat("Treatment:          ", treatment, "\n")
 cat("Instrument (IV):    ", instrument, "\n")
 cat("# Full covariates:  ", length(covariates_full), "\n")
 
-# ── 7. Descriptive Statistics on Outcome Variables ────────────────────────────
 cat("\n=============================================================\n")
 cat("DESCRIPTIVE STATISTICS — OUTCOME VARIABLES\n")
 cat("=============================================================\n")
@@ -133,7 +102,6 @@ summary_stats <- df %>%
   summary()
 print(summary_stats)
 
-# ── 8. Participation & Eligibility Rates ──────────────────────────────────────
 cat("\n=============================================================\n")
 cat("PARTICIPATION & ELIGIBILITY RATES\n")
 cat("=============================================================\n")
@@ -144,7 +112,6 @@ cat(sprintf("Participates in 401(k):        %.1f%% (%d obs)\n",
 cat(sprintf("Participation rate (eligible): %.1f%%\n",
             mean(df$p401[df$e401 == 1]) * 100))
 
-# ── 9. Means by Participation Status (mirrors Table 1 of paper) ───────────────
 cat("\n=============================================================\n")
 cat("MEANS BY 401(k) PARTICIPATION STATUS\n")
 cat("=============================================================\n")
@@ -159,12 +126,10 @@ table1 <- df %>%
   pivot_longer(-p401, names_to = "Variable", values_to = "Mean") %>%
   pivot_wider(names_from = p401, values_from = Mean)
 
-# Add full-sample mean
 table1$`Full Sample` <- colMeans(df[compare_vars])
 
 print(table1 %>% mutate(across(where(is.numeric), ~ round(.x, 2))))
 
-# ── 10. Means by Eligibility Status ───────────────────────────────────────────
 cat("\n=============================================================\n")
 cat("MEANS BY 401(k) ELIGIBILITY STATUS\n")
 cat("=============================================================\n")
@@ -178,10 +143,8 @@ table1b <- df %>%
 
 print(table1b %>% mutate(across(where(is.numeric), ~ round(.x, 2))))
 
-# ── 11. Save Cleaned Dataset & Config ─────────────────────────────────────────
 write.csv(df, "401k_clean.csv", row.names = FALSE)
 
-# Save variable lists as an R object for use in later steps
 save(outcomes, treatment, instrument, covariates_full,
      file = "project_config.RData")
 

@@ -1,17 +1,9 @@
-# =============================================================================
-# Step 4: ML Model — Random Forest + Instrumental Forest
-# 401(k) Project - Effects of 401(k) Participation on Wealth
-# =============================================================================
-
-# install.packages(c("tidyverse","randomForest","grf"))
-
 library(tidyverse)
 library(randomForest)
 library(grf)
 
 set.seed(42)
 
-# ── 1. Load and prepare data ──────────────────────────────────────────────────
 df <- read.csv("401k.csv")
 
 df <- df %>%
@@ -39,13 +31,12 @@ df <- df %>%
     age_55plus= as.integer(age >= 55)
   )
 
-# ── 2. Define feature matrices ────────────────────────────────────────────────
 feature_cols <- c(
   "age","inc","fsize",
   "marr","twoearn","db","pira","hown",
   "nohs","hs","smcol","col",
   "age_lt30","age_30_35","age_36_44","age_45_54",
-  "p401"          # included in RF for prediction; excluded in causal forest
+  "p401"
 )
 
 X_with_treat <- df[, feature_cols]
@@ -55,7 +46,6 @@ Z  <- df$e401
 Y_nfa <- df$net_tfa
 Y_tw  <- df$tw
 
-# ── 3. Train / Test Split (80/20) ─────────────────────────────────────────────
 n         <- nrow(df)
 train_idx <- sample(seq_len(n), size=floor(0.8*n), replace=FALSE)
 test_idx  <- setdiff(seq_len(n), train_idx)
@@ -67,7 +57,6 @@ X_test      <- X_with_treat[test_idx,  ]
 Y_nfa_train <- Y_nfa[train_idx];  Y_nfa_test <- Y_nfa[test_idx]
 Y_tw_train  <- Y_tw[train_idx];   Y_tw_test  <- Y_tw[test_idx]
 
-# ── 4. Tune mtry via OOB error ────────────────────────────────────────────────
 cat("\nTuning Random Forest (mtry)...\n")
 p <- ncol(X_train)
 mtry_candidates <- unique(c(floor(p/4), floor(p/3), floor(p/2), floor(sqrt(p))))
@@ -81,7 +70,6 @@ oob_errors <- sapply(mtry_candidates, function(m) {
 best_mtry <- mtry_candidates[which.min(oob_errors)]
 cat(sprintf("  Best mtry: %d\n", best_mtry))
 
-# ── 5. Train final RF models ──────────────────────────────────────────────────
 cat("\nTraining Random Forest models (ntree=500)...\n")
 rf_nfa <- randomForest(x=X_train, y=Y_nfa_train,
                        ntree=500, mtry=best_mtry, importance=TRUE)
@@ -89,7 +77,6 @@ rf_tw  <- randomForest(x=X_train, y=Y_tw_train,
                        ntree=500, mtry=best_mtry, importance=TRUE)
 cat("  Done.\n")
 
-# ── 6. Evaluate on test set ───────────────────────────────────────────────────
 pred_nfa <- predict(rf_nfa, newdata=X_test)
 pred_tw  <- predict(rf_tw,  newdata=X_test)
 
@@ -110,8 +97,6 @@ cat(sprintf("%-35s  %8s  %5s\n","Total Wealth",
             formatC(round(rmse_tw), format="d",big.mark=","), round(r2_tw,3)))
 cat(strrep("-",55), "\n", sep="")
 
-# ── 7. Variable importance plot ───────────────────────────────────────────────
-# Clean variable labels using case_when instead of recode()
 relabel <- function(v) {
   case_when(
     v == "inc"      ~ "Income",
@@ -156,7 +141,6 @@ p_imp <- ggplot(imp_df, aes(x=reorder(variable, importance), y=importance)) +
 ggsave("figure4_variable_importance.png", p_imp, width=8, height=5, dpi=150)
 cat("✓ Figure 4 saved\n")
 
-# ── 8. Predicted vs Actual plot ───────────────────────────────────────────────
 q05 <- quantile(Y_nfa_test, 0.05)
 q95 <- quantile(Y_nfa_test, 0.95)
 
@@ -182,7 +166,6 @@ p_fit <- ggplot(plot_fit, aes(x=actual/1000, y=predicted/1000, color=treated)) +
 ggsave("figure5_predicted_vs_actual.png", p_fit, width=7, height=6, dpi=150)
 cat("✓ Figure 5 saved\n")
 
-# ── 9. Causal Forest — Instrumental Forest ────────────────────────────────────
 cat("\nFitting Instrumental Forest for net_tfa...\n")
 cat("(This may take 2-5 minutes)\n")
 
@@ -227,7 +210,6 @@ cat(sprintf("  ATE (tw):      $%s  (SE: $%s)\n",
             formatC(round(ate_tw["estimate"]),format="d",big.mark=","),
             formatC(round(ate_tw["std.err"]), format="d",big.mark=",")))
 
-# ── 10. Print ATE summary ─────────────────────────────────────────────────────
 cat("\n", strrep("-",60), "\n", sep="")
 cat("AVERAGE TREATMENT EFFECTS — INSTRUMENTAL FOREST\n")
 cat(strrep("-",60), "\n", sep="")
@@ -241,7 +223,6 @@ cat(sprintf("%-35s  %9s  %9s\n","Total Wealth",
             formatC(round(ate_tw["std.err"]),  format="d",big.mark=",")))
 cat(strrep("-",60), "\n", sep="")
 
-# ── 11. Save outputs for Step 5 ───────────────────────────────────────────────
 test_results <- df[test_idx, ] %>%
   mutate(
     pred_nfa    = pred_nfa,

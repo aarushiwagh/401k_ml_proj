@@ -1,26 +1,11 @@
-# =============================================================================
-# Step 3: Replication Exercise — OLS and 2SLS (Table 3, Panel A)
-# 401(k) Project - Effects of 401(k) Participation on Wealth
-# =============================================================================
-
-# install.packages(c("tidyverse", "AER", "sandwich", "lmtest"))
-
 library(tidyverse)
-library(AER)        # ivreg() for 2SLS
-library(sandwich)   # robust standard errors
-library(lmtest)     # coeftest()
+library(AER)
+library(sandwich)
+library(lmtest)
 
-# ── 1. Load raw data and rebuild all derived columns ──────────────────────────
-# Load original CSV directly so this script works regardless of whether
-# Step 1 was run in R or Python (column names differ between them).
-
-df <- read.csv("401k.csv")   # adjust path if needed
+df <- read.csv("401k.csv")
 
 cat(sprintf("Loaded: %d rows x %d columns\n", nrow(df), ncol(df)))
-
-# ── 2. Create income categories ───────────────────────────────────────────────
-# IMPORTANT: loop variable below is named 'grp' (not 'inc') to avoid
-# clashing with the column df$inc (income) inside dplyr filter calls.
 
 df <- df %>%
   mutate(
@@ -38,7 +23,6 @@ df <- df %>%
                                 "40to50K","50to75K","gt75K"))
   )
 
-# Income dummies (base = lt10K, dropped in regression)
 df <- df %>%
   mutate(
     inc_10to20 = as.integer(inc_cat == "10to20K"),
@@ -49,7 +33,6 @@ df <- df %>%
     inc_gt75   = as.integer(inc_cat == "gt75K")
   )
 
-# Education dummies (base = nohs)
 df <- df %>%
   mutate(
     nohs  = as.integer(educ < 12),
@@ -58,7 +41,6 @@ df <- df %>%
     col   = as.integer(educ >= 16)
   )
 
-# Age dummies (base = age_55plus)
 df <- df %>%
   mutate(
     age_lt30   = as.integer(age < 30),
@@ -73,7 +55,6 @@ print(table(df$inc_cat))
 cat(sprintf("Participation: %.1f%% | Eligibility: %.1f%%\n\n",
             mean(df$p401)*100, mean(df$e401)*100))
 
-# ── 3. Covariate lists ────────────────────────────────────────────────────────
 controls_full <- c(
   "age_lt30","age_30_35","age_36_44","age_45_54",
   "inc_10to20","inc_20to30","inc_30to40","inc_40to50","inc_50to75","inc_gt75",
@@ -81,7 +62,6 @@ controls_full <- c(
   "marr","fsize","twoearn","db","pira","hown"
 )
 
-# Within income category: use linear income instead of dummies
 controls_within <- c(
   "age_lt30","age_30_35","age_36_44","age_45_54",
   "hs","smcol","col",
@@ -89,7 +69,6 @@ controls_within <- c(
   "inc"
 )
 
-# ── 4. Formula builders ───────────────────────────────────────────────────────
 make_ols <- function(outcome, controls)
   as.formula(paste(outcome, "~ p401 +", paste(controls, collapse=" + ")))
 
@@ -100,7 +79,6 @@ make_iv <- function(outcome, controls)
 make_fs <- function(controls)
   as.formula(paste("p401 ~ e401 +", paste(controls, collapse=" + ")))
 
-# ── 5. Safe model runner ──────────────────────────────────────────────────────
 run_models <- function(data, outcome, controls) {
   result <- list(n=nrow(data), fs_coef=NA, fs_se=NA,
                  ols_coef=NA, ols_se=NA, iv_coef=NA, iv_se=NA)
@@ -133,10 +111,8 @@ run_models <- function(data, outcome, controls) {
   result
 }
 
-# ── 6. Run regressions ────────────────────────────────────────────────────────
 outcomes_list <- c("net_tfa","net_nifa","tw")
 
-# Internal level names (no special chars) and display labels (for printing)
 grp_levels <- c("lt10K","10to20K","20to30K","30to40K","40to50K","50to75K","gt75K")
 grp_labels <- c("<$10K","$10-20K","$20-30K","$30-40K","$40-50K","$50-75K",">$75K")
 
@@ -146,7 +122,6 @@ full_results <- setNames(
   outcomes_list)
 
 cat("Running income-category regressions...\n")
-# NOTE: loop variable is 'grp', NOT 'inc', to avoid clashing with df$inc
 inc_results <- lapply(grp_levels, function(grp) {
   sub <- df %>% filter(inc_cat == grp)
   cat(sprintf("  %-10s  n=%d\n", grp, nrow(sub)))
@@ -155,7 +130,6 @@ inc_results <- lapply(grp_levels, function(grp) {
 })
 names(inc_results) <- grp_levels
 
-# ── 7. Print Table 3 ──────────────────────────────────────────────────────────
 fc     <- function(x, w=8) { if(is.na(x)) return(formatC("NA",width=w));
                               formatC(round(x), format="d", big.mark=",", width=w) }
 fse    <- function(x)       { if(is.na(x)) return("      NA");
@@ -202,7 +176,6 @@ cat("Robust standard errors (HC1) in parentheses.\n")
 cat("2SLS instruments p401 with e401 (401k eligibility).\n")
 cat("<$10K: all non-participants are ineligible — instrument has no variation.\n")
 
-# ── 8. Save CSV ───────────────────────────────────────────────────────────────
 rows <- list()
 for (y in outcomes_list) {
   r <- full_results[[y]]
@@ -224,7 +197,6 @@ results_df <- bind_rows(rows)
 write.csv(results_df, "table3_replication.csv", row.names=FALSE)
 cat("\n✓ Results saved to: table3_replication.csv\n")
 
-# ── 9. Plot ───────────────────────────────────────────────────────────────────
 plot_df <- results_df %>%
   filter(sample != "Full Sample") %>%
   mutate(

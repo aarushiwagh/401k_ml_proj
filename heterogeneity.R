@@ -1,29 +1,12 @@
-# =============================================================================
-# Step 5: Heterogeneity Analysis
-# 401(k) Project - Effects of 401(k) Participation on Wealth
-#
-# Uses individual-level treatment effects (tau_hat) from the Instrumental
-# Forest in Step 4 to study HOW the treatment effect varies across:
-#   (1) Income groups
-#   (2) Education groups
-#   (3) Age groups
-# Also compares ML heterogeneity results to the 2SLS by-income results
-# from Step 3 to triangulate findings.
-# =============================================================================
-
 library(tidyverse)
 
-# ── 1. Load test set predictions from Step 4 ──────────────────────────────────
-# This file was saved to your working directory at the end of Step 4
 preds <- read.csv("test_set_predictions.csv")
 
 cat(sprintf("Test set loaded: %d observations\n", nrow(preds)))
 cat(sprintf("Columns: %s\n", paste(names(preds), collapse=", ")))
 
-# Rebuild clean factor labels for grouping variables
 preds <- preds %>%
   mutate(
-    # Income group (readable labels, correct order)
     inc_group = case_when(
       inc <  10000                 ~ "<$10K",
       inc >= 10000 & inc < 20000   ~ "$10-20K",
@@ -37,7 +20,6 @@ preds <- preds %>%
                        levels = c("<$10K","$10-20K","$20-30K","$30-40K",
                                   "$40-50K","$50-75K",">$75K")),
 
-    # Education group
     educ_group = case_when(
       educ < 12                    ~ "No High School",
       educ == 12                   ~ "High School",
@@ -48,7 +30,6 @@ preds <- preds %>%
                         levels = c("No High School","High School",
                                    "Some College","College+")),
 
-    # Age group
     age_group = case_when(
       age < 30                     ~ "<30",
       age >= 30 & age <= 35        ~ "30-35",
@@ -60,7 +41,6 @@ preds <- preds %>%
                        levels = c("<30","30-35","36-44","45-54","55+"))
   )
 
-# ── 2. Helper: summarise treatment effects by group ───────────────────────────
 te_by_group <- function(data, group_var, tau_var) {
   data %>%
     group_by(across(all_of(group_var))) %>%
@@ -76,14 +56,12 @@ te_by_group <- function(data, group_var, tau_var) {
     rename(group = all_of(group_var))
 }
 
-# ── 3. Compute treatment effects by each grouping variable ────────────────────
 te_inc_nfa  <- te_by_group(preds, "inc_group",  "tau_hat_nfa")
 te_educ_nfa <- te_by_group(preds, "educ_group", "tau_hat_nfa")
 te_age_nfa  <- te_by_group(preds, "age_group",  "tau_hat_nfa")
 te_inc_tw   <- te_by_group(preds, "inc_group",  "tau_hat_tw")
 te_educ_tw  <- te_by_group(preds, "educ_group", "tau_hat_tw")
 
-# ── 4. Print heterogeneity tables ─────────────────────────────────────────────
 print_te_table <- function(te_df, title) {
   cat("\n", strrep("-", 65), "\n", sep="")
   cat(title, "\n")
@@ -109,7 +87,6 @@ print_te_table(te_age_nfa,  "TREATMENT EFFECT ON NET FINANCIAL ASSETS BY AGE GRO
 print_te_table(te_inc_tw,   "TREATMENT EFFECT ON TOTAL WEALTH BY INCOME GROUP")
 print_te_table(te_educ_tw,  "TREATMENT EFFECT ON TOTAL WEALTH BY EDUCATION")
 
-# ── 5. Figure 6: Heterogeneity by Income Group ───────────────────────────────
 p6 <- ggplot(te_inc_nfa, aes(x=group, y=mean_tau/1000)) +
   geom_col(fill="#2166ac", alpha=0.85, width=0.6) +
   geom_errorbar(aes(ymin=ci_lo/1000, ymax=ci_hi/1000),
@@ -131,7 +108,6 @@ p6 <- ggplot(te_inc_nfa, aes(x=group, y=mean_tau/1000)) +
 ggsave("figure6_heterogeneity_income.png", p6, width=9, height=5, dpi=150)
 cat("✓ Figure 6 saved\n")
 
-# ── 6. Figure 7: Heterogeneity by Education ───────────────────────────────────
 p7 <- ggplot(te_educ_nfa, aes(x=group, y=mean_tau/1000)) +
   geom_col(fill="#4dac26", alpha=0.85, width=0.6) +
   geom_errorbar(aes(ymin=ci_lo/1000, ymax=ci_hi/1000),
@@ -152,7 +128,6 @@ p7 <- ggplot(te_educ_nfa, aes(x=group, y=mean_tau/1000)) +
 ggsave("figure7_heterogeneity_education.png", p7, width=8, height=5, dpi=150)
 cat("✓ Figure 7 saved\n")
 
-# ── 7. Figure 8: Distribution of individual treatment effects ─────────────────
 p8 <- ggplot(preds, aes(x=tau_hat_nfa/1000)) +
   geom_histogram(bins=50, fill="#2166ac", alpha=0.75, color="white") +
   geom_vline(xintercept=mean(preds$tau_hat_nfa)/1000,
@@ -176,7 +151,6 @@ p8 <- ggplot(preds, aes(x=tau_hat_nfa/1000)) +
 ggsave("figure8_te_distribution.png", p8, width=8, height=5, dpi=150)
 cat("✓ Figure 8 saved\n")
 
-# ── 8. Figure 9: Combined — Income heterogeneity for NFA and TW ───────────────
 combined <- bind_rows(
   te_inc_nfa %>% mutate(outcome="Net Financial Assets"),
   te_inc_tw  %>% mutate(outcome="Total Wealth")
@@ -206,7 +180,6 @@ p9 <- ggplot(combined, aes(x=group, y=mean_tau/1000, fill=outcome)) +
 ggsave("figure9_nfa_vs_tw_by_income.png", p9, width=9, height=5, dpi=150)
 cat("✓ Figure 9 saved\n")
 
-# ── 9. Save heterogeneity summary tables ─────────────────────────────────────
 write.csv(te_inc_nfa,  "heterogeneity_income_nfa.csv",  row.names=FALSE)
 write.csv(te_educ_nfa, "heterogeneity_educ_nfa.csv",    row.names=FALSE)
 write.csv(te_age_nfa,  "heterogeneity_age_nfa.csv",     row.names=FALSE)
